@@ -8,17 +8,19 @@ const Candidate = require('../models/candidate');
 const User = require('../models/user');
 const Availability = require('../models/availability');
 const Comment = require('../models/comment');
+const csrf = require('csurf');
+const csrfProtection = csrf({ cookie: true });
 
-router.get('/new', authenticationEnsurer, (req, res, next) => {
-  res.render('new', { user: req.user });
+router.get('/new', authenticationEnsurer, csrfProtection, (req, res, next) => {
+  res.render('new', { user: req.user, csrfToken: req.csrfToken() });
 });
 
-router.post('/', authenticationEnsurer, async (req, res, next) => {
-  const scheduleId = uuidv4();
+router.post('/', authenticationEnsurer, csrfProtection, async (req, res, next) => {
+const scheduleId = uuidv4();
   const updatedAt = new Date();
   await Schedule.create({
     scheduleId: scheduleId,
-    scheduleName: req.body.scheduleName.slice(0, 255) || '（名称未設定）',
+    scheduleName: req.body.scheduleName.slice(0, 255) || '（Untitled）',
     memo: req.body.memo,
     createdBy: req.user.id,
     updatedAt: updatedAt
@@ -105,14 +107,14 @@ router.get('/:scheduleId', authenticationEnsurer, async (req, res, next) => {
       commentMap: commentMap
     });
   } else {
-    const err = new Error('指定された予定は見つかりません');
+    const err = new Error('Specified schedule not found');
     err.status = 404;
     next(err);
   }
 });
 
-router.get('/:scheduleId/edit', authenticationEnsurer, async (req, res, next) => {
-  const schedule = await Schedule.findOne({
+router.get('/:scheduleId/edit', authenticationEnsurer, csrfProtection, async (req, res, next) => {
+const schedule = await Schedule.findOne({
     where: {
       scheduleId: req.params.scheduleId
     }
@@ -125,10 +127,11 @@ router.get('/:scheduleId/edit', authenticationEnsurer, async (req, res, next) =>
     res.render('edit', {
       user: req.user,
       schedule: schedule,
-      candidates: candidates
+      candidates: candidates,
+      csrfToken: req.csrfToken()
     });
   } else {
-    const err = new Error('指定された予定がない、または、予定する権限がありません');
+    const err = new Error('No schedule is specified or you do not have the authority to set a schedule');
     err.status = 404;
     next(err);
   }
@@ -138,8 +141,8 @@ function isMine(req, schedule) {
   return schedule && parseInt(schedule.createdBy) === parseInt(req.user.id);
 }
 
-router.post('/:scheduleId', authenticationEnsurer, async (req, res, next) => {
-  let schedule = await Schedule.findOne({
+router.post('/:scheduleId', authenticationEnsurer, csrfProtection, async (req, res, next) => {
+let schedule = await Schedule.findOne({
     where: {
       scheduleId: req.params.scheduleId
     }
@@ -149,7 +152,7 @@ router.post('/:scheduleId', authenticationEnsurer, async (req, res, next) => {
       const updatedAt = new Date();
       schedule = await schedule.update({
         scheduleId: schedule.scheduleId,
-        scheduleName: req.body.scheduleName.slice(0, 255) || '（名称未設定）',
+        scheduleName: req.body.scheduleName.slice(0, 255) || '（Untitled）',
         memo: req.body.memo,
         createdBy: req.user.id,
         updatedAt: updatedAt
@@ -165,12 +168,12 @@ router.post('/:scheduleId', authenticationEnsurer, async (req, res, next) => {
       await deleteScheduleAggregate(req.params.scheduleId);
       res.redirect('/');
     } else {
-      const err = new Error('不正なリクエストです');
+      const err = new Error('Request is incorrect.');
       err.status = 400;
       next(err);
     }
   } else {
-    const err = new Error('指定された予定がない、または、編集する権限がありません');
+    const err = new Error('You do not have the specified schedule or you do not have permission to edit it');
     err.status = 404;
     next(err);
   }
